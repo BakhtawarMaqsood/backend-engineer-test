@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { Pool } from 'pg';
-import { randomUUID } from 'crypto';
 import { Database } from './db';
+import { registerRoutes } from './routes';
 
 const fastify = Fastify({ logger: true });
 
@@ -24,6 +24,9 @@ async function bootstrap() {
   const db = new Database(pool);
   await db.createTables();
   console.log('Database tables created successfully');
+
+  await registerRoutes(fastify, db);
+  console.log('Routes registered successfully');
 }
 
 try {
