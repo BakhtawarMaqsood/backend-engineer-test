@@ -187,4 +187,32 @@ describe('Blockchain Indexer API', () => {
       expect(data.error).toBe('Invalid transaction balance');
     });
   })
+
+  describe('GET /balance/:address', () => {
+      test('should return 0 for non-existent address', async () => {
+      const response = await fetch(`${API_URL}/balance/nonexistent`);
+      expect(response.status).toBe(200);
+      
+      const data = await response.json();
+      expect(data.address).toBe('nonexistent');
+      expect(data.balance).toBe(0);
+    });
+
+    test('should return correct balances', async () => {
+      const response1 = await fetch(`${API_URL}/balance/addr1`);
+      expect(response1.status).toBe(200);
+      const data1 = await response1.json();
+      expect(data1.balance).toBe(0);
+
+      const response2 = await fetch(`${API_URL}/balance/addr2`);
+      expect(response2.status).toBe(200);
+      const data2 = await response2.json();
+      expect(data2.balance).toBe(4);
+
+      const response3 = await fetch(`${API_URL}/balance/addr3`);
+      expect(response3.status).toBe(200);
+      const data3 = await response3.json();
+      expect(data3.balance).toBe(6);
+    });
+  });
 })

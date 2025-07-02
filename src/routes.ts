@@ -102,7 +102,13 @@ export async function registerRoutes(fastify: FastifyInstance, db: Database) {
     }
   }, async (request, reply) => {
     try {
-      // To be implemented
+      const { address } = request.params as { address: string };
+      const balance = await db.getBalance(address);
+      
+      return reply.status(200).send({
+        address,
+        balance
+      });
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({

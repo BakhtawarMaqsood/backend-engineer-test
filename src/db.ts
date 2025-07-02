@@ -179,4 +179,12 @@ export class Database {
       `, [output.address, output.value]);
     }
   }
+
+  async getBalance(address: string): Promise<number> {
+    const result = await this.pool.query(`
+      SELECT balance FROM balances WHERE address = $1
+    `, [address]);
+    
+    return result.rows.length > 0 ? parseFloat(result.rows[0].balance) : 0;
+  }
 }
