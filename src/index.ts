@@ -11,19 +11,23 @@ fastify.get('/', async (request, reply) => {
 
 async function bootstrap() {
   console.log('Bootstrapping...');
-  const databaseUrl = process.env.DATABASE_URL;
+  const isTestMode = process.env.NODE_ENV === 'test';
+
+  const databaseUrl = isTestMode ? process.env.TEST_DATABASE_URL: process.env.DATABASE_URL
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required');
   }
+  
+  console.log('Test mode:', isTestMode);
 
   const pool = new Pool({
     connectionString: databaseUrl
   });
 
   const db = new Database(pool);
-  await db.createTables();
-  console.log('Database tables created successfully');
+    await db.createTables();
+    console.log('Database tables created successfully');
 
   await registerRoutes(fastify, db);
   console.log('Routes registered successfully');

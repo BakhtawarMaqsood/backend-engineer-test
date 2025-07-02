@@ -130,12 +130,56 @@ export async function registerRoutes(fastify: FastifyInstance, db: Database) {
     }
   }, async (request, reply) => {
     try {
-      // To be implemented
+      const { height } = request.query as { height: number };
+      const currentHeight = await db.getCurrentHeight();
+      
+      if (height < 0 || height > currentHeight) {
+        return reply.status(400).send({
+          error: 'Invalid rollback height',
+          message: `Height must be between 0 and ${currentHeight}`
+        });
+      }
+
+      if (currentHeight - height > 2000) {
+        return reply.status(400).send({
+          error: 'Rollback too far',
+          message: 'Cannot rollback more than 2000 blocks'
+        });
+      }
+
+      await db.rollbackToHeight(height);
+      
+      return reply.status(200).send({
+        message: 'Rollback completed successfully',
+        rolledBackTo: height
+      });
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({
         error: 'Internal server error',
         message: 'Failed to perform rollback'
+      });
+    }
+  });
+
+  fastify.post('/cleanup', async (request, reply) => {
+    try {
+      if (process.env.NODE_ENV !== 'test') {
+        return reply.status(403).send({
+          error: 'Forbidden',
+          message: 'Cleanup is only allowed in test mode'
+        });
+      }
+      
+      await db.cleanupDatabase();
+      return reply.status(200).send({
+        message: 'Database cleaned successfully'
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({
+        error: 'Internal server error',
+        message: 'Failed to cleanup database'
       });
     }
   });

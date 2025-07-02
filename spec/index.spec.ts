@@ -14,6 +14,17 @@ const createBlockId = (height: number, transactions: Transaction[]): string =>{
 describe('Blockchain Indexer API', () => {
   beforeAll(async () => {
     await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    try {
+      const response = await fetch(`${API_URL}/cleanup`, {
+        method: 'POST'
+      });
+      if (response.ok) {
+        console.log('Database cleaned before tests');
+      }
+    } catch (error) {
+      console.log('Could not clean database, continuing with tests');
+    }
   });
 
   describe('POST /blocks', () => {
@@ -213,6 +224,56 @@ describe('Blockchain Indexer API', () => {
       expect(response3.status).toBe(200);
       const data3 = await response3.json();
       expect(data3.balance).toBe(6);
+    });
+  });
+
+  describe('POST /rollback', () => {
+    test('should rollback to height 1', async () => {
+      const response = await fetch(`${API_URL}/rollback?height=1`, {
+        method: 'POST'
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.message).toBe('Rollback completed successfully');
+      expect(data.rolledBackTo).toBe(1);
+    });
+
+    test('should have correct balances after rollback', async () => {
+      const response1 = await fetch(`${API_URL}/balance/addr1`);
+      expect(response1.status).toBe(200);
+      const data1 = await response1.json();
+      expect(data1.balance).toBe(10);
+
+      const response2 = await fetch(`${API_URL}/balance/addr2`);
+      expect(response2.status).toBe(200);
+      const data2 = await response2.json();
+      expect(data2.balance).toBe(0);
+
+      const response3 = await fetch(`${API_URL}/balance/addr3`);
+      expect(response3.status).toBe(200);
+      const data3 = await response3.json();
+      expect(data3.balance).toBe(0);
+    });
+
+    test('should reject rollback to invalid height', async () => {
+      const response = await fetch(`${API_URL}/rollback?height=999`, {
+        method: 'POST'
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.error).toBe('Invalid rollback height');
+    });
+
+    test('should reject rollback to negative height', async () => {
+      const response = await fetch(`${API_URL}/rollback?height=-1`, {
+        method: 'POST'
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.error).toBe('Invalid rollback height');
     });
   });
 })

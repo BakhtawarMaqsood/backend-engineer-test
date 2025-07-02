@@ -46,7 +46,9 @@ export class Database {
         value NUMERIC NOT NULL,
         index INTEGER NOT NULL,
         is_spent BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        spent_by_transaction_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (transaction_id, index)
       );
     `);
 
@@ -57,6 +59,31 @@ export class Database {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+  }
+
+  async cleanupDatabase(): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      if (process.env.NODE_ENV !== 'test') {
+        throw new Error('Cleanup is only allowed in test mode');
+      }
+
+      await client.query('DELETE FROM balances');
+      await client.query('DELETE FROM outputs');
+      await client.query('DELETE FROM inputs');
+      await client.query('DELETE FROM transactions');
+      await client.query('DELETE FROM blocks');
+      
+      await client.query('COMMIT');
+      console.log('Database cleaned successfully');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getCurrentHeight(): Promise<number> {
@@ -141,9 +168,9 @@ export class Database {
 
     for (const input of transaction.inputs) {
       await client.query(`
-        UPDATE outputs SET is_spent = TRUE 
-        WHERE transaction_id = $1 AND index = $2
-      `, [input.txId, input.index]);
+        UPDATE outputs SET is_spent = TRUE, spent_by_transaction_id = $1
+        WHERE transaction_id = $2 AND index = $3
+      `, [transaction.id, input.txId, input.index]);
 
       const result = await client.query(`
         SELECT address, value FROM outputs 
@@ -186,5 +213,56 @@ export class Database {
     `, [address]);
     
     return result.rows.length > 0 ? parseFloat(result.rows[0].balance) : 0;
+  }
+
+  async rollbackToHeight(height: number): Promise<void> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+  
+      const txs = await client.query(`
+        SELECT t.id FROM transactions t
+        JOIN blocks b ON t.block_id = b.id
+        WHERE b.height > $1
+      `, [height]);
+  
+      const txIds = txs.rows.map(r => r.id);
+  
+      if (txIds.length > 0) {
+        await client.query(`
+          UPDATE outputs
+          SET is_spent = FALSE, spent_by_transaction_id = NULL
+          WHERE spent_by_transaction_id = ANY($1)
+        `, [txIds]);
+  
+        await client.query(`
+          DELETE FROM outputs
+          WHERE transaction_id = ANY($1)
+        `, [txIds]);
+  
+        await client.query(`
+          DELETE FROM transactions WHERE id = ANY($1)
+        `, [txIds]);
+      }
+  
+      await client.query(`DELETE FROM blocks WHERE height > $1`, [height]);
+  
+      await client.query(`DELETE FROM balances`);
+      await client.query(`
+        INSERT INTO balances (address, balance)
+        SELECT address, SUM(value)
+        FROM outputs
+        WHERE is_spent = FALSE
+        GROUP BY address
+      `);
+  
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
