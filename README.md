@@ -29,6 +29,11 @@ Rolls back all blocks after the given height and recalculates balances based on 
 
 ## Setup
 
+### With Docker
+```bash
+docker-compose up --build
+```
+
 ### With Bun
 ```bash
 bun start
