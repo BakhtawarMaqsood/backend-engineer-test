@@ -11,16 +11,13 @@ fastify.get('/', async (request, reply) => {
 
 async function bootstrap() {
   console.log('Bootstrapping...');
-  const isTestMode = process.env.NODE_ENV === 'test';
 
-  const databaseUrl = isTestMode ? process.env.TEST_DATABASE_URL: process.env.DATABASE_URL
+  const databaseUrl = process.env.DATABASE_URL
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required');
   }
   
-  console.log('Test mode:', isTestMode);
-
   const pool = new Pool({
     connectionString: databaseUrl
   });

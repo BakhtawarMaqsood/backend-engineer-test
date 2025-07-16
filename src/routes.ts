@@ -1,9 +1,41 @@
 import type { FastifyInstance } from 'fastify';
-import { Database } from './db';
+import type { IDatabase } from './types';
 
 import type { Block } from './types';
 
-export async function registerRoutes(fastify: FastifyInstance, db: Database) {
+
+import type { FastifyReply, FastifyRequest } from 'fastify';
+export function getBalanceHandler(db: IDatabase) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { address } = (request.params as { address: string });
+      const balance = await db.getBalance(address);
+      return reply.status(200).send({
+        address,
+        balance: balance.toString()
+      });
+    } catch (error) {
+      request.server.log.error(error);
+      return reply.status(500).send({
+        error: 'Internal server error',
+        message: 'Failed to get balance'
+      });
+    }
+  };
+}
+
+export function getBalanceHandlerPure(db: IDatabase) {
+  return async (address: string) => {
+    try {
+      const balance = await db.getBalance(address);
+      return { status: 200, body: { address, balance: balance.toString() } };
+    } catch (error) {
+      return { status: 500, body: { error: 'Internal server error', message: 'Failed to get balance' } };
+    }
+  };
+}
+
+export async function registerRoutes(fastify: FastifyInstance, db: IDatabase) {
   fastify.post('/blocks', {
     schema: {
       body: {
@@ -100,23 +132,7 @@ export async function registerRoutes(fastify: FastifyInstance, db: Database) {
         }
       }
     }
-  }, async (request, reply) => {
-    try {
-      const { address } = request.params as { address: string };
-      const balance = await db.getBalance(address);
-      
-      return reply.status(200).send({
-        address,
-        balance: balance.toString()
-      });
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-        message: 'Failed to get balance'
-      });
-    }
-  });
+  }, getBalanceHandler(db));
 
   fastify.post('/rollback', {
     schema: {
@@ -158,28 +174,6 @@ export async function registerRoutes(fastify: FastifyInstance, db: Database) {
       return reply.status(500).send({
         error: 'Internal server error',
         message: 'Failed to perform rollback'
-      });
-    }
-  });
-
-  fastify.post('/cleanup', async (request, reply) => {
-    try {
-      if (process.env.NODE_ENV !== 'test') {
-        return reply.status(403).send({
-          error: 'Forbidden',
-          message: 'Cleanup is only allowed in test mode'
-        });
-      }
-      
-      await db.cleanupDatabase();
-      return reply.status(200).send({
-        message: 'Database cleaned successfully'
-      });
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-        message: 'Failed to cleanup database'
       });
     }
   });

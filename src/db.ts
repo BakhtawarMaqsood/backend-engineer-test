@@ -1,8 +1,8 @@
 import { Pool } from 'pg';
 import { createHash } from 'crypto';
-import type { Block, Transaction } from './types';
+import type { Block, Transaction, IDatabase } from './types';
 
-export class Database {
+export class Database implements IDatabase {
   private pool: Pool;
 
   constructor(pool: Pool) {
@@ -68,31 +68,6 @@ export class Database {
         PRIMARY KEY (block_height, address)
       );
     `);
-  }
-
-  async cleanupDatabase(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      
-      if (process.env.NODE_ENV !== 'test') {
-        throw new Error('Cleanup is only allowed in test mode');
-      }
-
-      await client.query('DELETE FROM balances');
-      await client.query('DELETE FROM outputs');
-      await client.query('DELETE FROM inputs');
-      await client.query('DELETE FROM transactions');
-      await client.query('DELETE FROM blocks');
-      
-      await client.query('COMMIT');
-      console.log('Database cleaned successfully');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
   }
 
   async getCurrentHeight(): Promise<number> {

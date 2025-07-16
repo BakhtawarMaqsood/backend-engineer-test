@@ -24,3 +24,14 @@ export interface Balance {
   address: string;
   balance: string;
 }
+
+export interface IDatabase {
+  createTables(): Promise<void>;
+  getCurrentHeight(): Promise<number>;
+  validateBlockId(block: Block): Promise<boolean>;
+  validateInputOutputBalance(transactions: Transaction[]): Promise<boolean>;
+  addBlock(block: Block): Promise<void>;
+  getBalance(address: string): Promise<bigint>;
+  rollbackToHeight(height: number): Promise<void>;
+  toSatoshis(value: number | string): bigint;
+}

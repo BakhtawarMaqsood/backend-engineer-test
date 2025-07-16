@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "start": "bun src/index.ts",
-    "test-server": "NODE_ENV=test bun src/index.ts",
     "test": "bun test",
     "run-docker": "docker-compose up -d --build"
   },
