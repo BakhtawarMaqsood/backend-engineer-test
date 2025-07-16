@@ -35,7 +35,7 @@ describe('Blockchain Indexer API', () => {
           inputs: [],
           outputs: [{
             address: 'addr1',
-            value: 10
+            value: 0.00005
           }]
         }]),
         height: 1,
@@ -44,7 +44,7 @@ describe('Blockchain Indexer API', () => {
           inputs: [],
           outputs: [{
             address: 'addr1',
-            value: 10
+            value: 0.00005
           }]
         }]
       };
@@ -128,10 +128,10 @@ describe('Blockchain Indexer API', () => {
           }],
           outputs: [{
             address: 'addr2',
-            value: 4
+            value: 0.0000283
           }, {
             address: 'addr3',
-            value: 6
+            value: 0.0000217
           }]
         }]),
         height: 2,
@@ -143,10 +143,10 @@ describe('Blockchain Indexer API', () => {
           }],
           outputs: [{
             address: 'addr2',
-            value: 4
+            value: 0.0000283
           }, {
             address: 'addr3',
-            value: 6
+            value: 0.0000217
           }]
         }]
       };
@@ -182,7 +182,7 @@ describe('Blockchain Indexer API', () => {
           }],
           outputs: [{
             address: 'addr4',
-            value: 5
+            value: 6
           }]
         }]
       };
@@ -206,24 +206,24 @@ describe('Blockchain Indexer API', () => {
       
       const data = await response.json();
       expect(data.address).toBe('nonexistent');
-      expect(data.balance).toBe(0);
+      expect(data.balance).toBe('0');
     });
 
     test('should return correct balances', async () => {
       const response1 = await fetch(`${API_URL}/balance/addr1`);
       expect(response1.status).toBe(200);
       const data1 = await response1.json();
-      expect(data1.balance).toBe(0);
+      expect(Number(data1.balance)).toBe(0);
 
       const response2 = await fetch(`${API_URL}/balance/addr2`);
       expect(response2.status).toBe(200);
       const data2 = await response2.json();
-      expect(data2.balance).toBe(4);
+      expect(Number(data2.balance) / 1e8).toBe(0.0000283);
 
       const response3 = await fetch(`${API_URL}/balance/addr3`);
       expect(response3.status).toBe(200);
       const data3 = await response3.json();
-      expect(data3.balance).toBe(6);
+      expect(Number(data3.balance) / 1e8).toBe(0.0000217);
     });
   });
 
@@ -243,17 +243,17 @@ describe('Blockchain Indexer API', () => {
       const response1 = await fetch(`${API_URL}/balance/addr1`);
       expect(response1.status).toBe(200);
       const data1 = await response1.json();
-      expect(data1.balance).toBe(10);
+      expect(Number(data1.balance) / 1e8).toBe(0.00005);
 
       const response2 = await fetch(`${API_URL}/balance/addr2`);
       expect(response2.status).toBe(200);
       const data2 = await response2.json();
-      expect(data2.balance).toBe(0);
+      expect(data2.balance).toBe('0');
 
       const response3 = await fetch(`${API_URL}/balance/addr3`);
       expect(response3.status).toBe(200);
       const data3 = await response3.json();
-      expect(data3.balance).toBe(0);
+      expect(data3.balance).toBe('0');
     });
 
     test('should reject rollback to invalid height', async () => {

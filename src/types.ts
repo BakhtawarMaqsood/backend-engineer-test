@@ -22,5 +22,5 @@ export interface Block {
 
 export interface Balance {
   address: string;
-  balance: number;
+  balance: string;
 }

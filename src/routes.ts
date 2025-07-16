@@ -37,7 +37,7 @@ export async function registerRoutes(fastify: FastifyInstance, db: Database) {
                     required: ['address', 'value'],
                     properties: {
                       address: { type: 'string' },
-                      value: { type: 'number' }
+                      value: { type: 'string' }
                     }
                   }
                 }
@@ -107,7 +107,7 @@ export async function registerRoutes(fastify: FastifyInstance, db: Database) {
       
       return reply.status(200).send({
         address,
-        balance
+        balance: balance.toString()
       });
     } catch (error) {
       fastify.log.error(error);

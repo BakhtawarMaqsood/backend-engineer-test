@@ -32,7 +32,7 @@ export class Database {
         transaction_id TEXT REFERENCES transactions(id) ON DELETE CASCADE,
         tx_id TEXT NOT NULL,
         index INTEGER NOT NULL,
-        value NUMERIC NOT NULL,
+        value BIGINT NOT NULL,
         address TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -43,7 +43,7 @@ export class Database {
         id SERIAL PRIMARY KEY,
         transaction_id TEXT REFERENCES transactions(id) ON DELETE CASCADE,
         address TEXT NOT NULL,
-        value NUMERIC NOT NULL,
+        value BIGINT NOT NULL,
         index INTEGER NOT NULL,
         is_spent BOOLEAN DEFAULT FALSE,
         spent_by_transaction_id TEXT,
@@ -55,7 +55,7 @@ export class Database {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS balances (
         address TEXT PRIMARY KEY,
-        balance NUMERIC DEFAULT 0,
+        balance BIGINT DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -104,9 +104,10 @@ export class Database {
 
   async validateInputOutputBalance(transactions: Transaction[]): Promise<boolean> {
       for (const transaction of transactions) {
-        let inputSum = 0;
-        let outputSum = 0;
+        let inputSum = 0n;
+        let outputSum = 0n;
 
+        console.log(transaction.inputs);
         if (transaction.inputs.length > 0) {
           for (const input of transaction.inputs) {
             const result = await this.pool.query(`
@@ -117,20 +118,24 @@ export class Database {
             if (result.rows.length === 0) {
               return false;
             }
-            inputSum += parseFloat(result.rows[0].value);
+
+            inputSum += BigInt(result.rows[0].value);
           }
         }
 
         for (const output of transaction.outputs) {
-          outputSum += output.value;
+          outputSum += this.toSatoshis(output.value);
         }
 
+        console.log(inputSum, outputSum);
+
         if (transaction.inputs.length > 0) {
-          if (Math.abs(inputSum - outputSum) > 0.000001) {
+          console.log(inputSum, outputSum);
+          if (inputSum !== outputSum) {
             return false;
           }
         } else {
-          if (outputSum <= 0) {
+          if (outputSum <= 0n) {
             return false;
           }
         }
@@ -179,7 +184,7 @@ export class Database {
 
       if (result.rows.length > 0) {
         const { address, value } = result.rows[0];
-        const negativeValue = -parseFloat(value);
+        const negativeValue = (-BigInt(value)).toString();
         
         await client.query(`
           INSERT INTO balances (address, balance) VALUES ($1, $2)
@@ -196,23 +201,23 @@ export class Database {
       await client.query(`
         INSERT INTO outputs (transaction_id, address, value, index) 
         VALUES ($1, $2, $3, $4)
-      `, [transaction.id, output.address, output.value, i]);
+      `, [transaction.id, output.address, this.toSatoshis(output.value), i]);
 
       await client.query(`
         INSERT INTO balances (address, balance) VALUES ($1, $2)
         ON CONFLICT (address) DO UPDATE SET 
           balance = balances.balance + $2,
           updated_at = CURRENT_TIMESTAMP
-      `, [output.address, output.value]);
+      `, [output.address, this.toSatoshis(output.value)]);
     }
   }
 
-  async getBalance(address: string): Promise<number> {
+  async getBalance(address: string): Promise<bigint> {
     const result = await this.pool.query(`
       SELECT balance FROM balances WHERE address = $1
     `, [address]);
     
-    return result.rows.length > 0 ? parseFloat(result.rows[0].balance) : 0;
+    return result.rows.length > 0 ? BigInt(result.rows[0].balance) : 0n;
   }
 
   async rollbackToHeight(height: number): Promise<void> {
@@ -251,7 +256,7 @@ export class Database {
       await client.query(`DELETE FROM balances`);
       await client.query(`
         INSERT INTO balances (address, balance)
-        SELECT address, SUM(value)
+        SELECT address, SUM(value)::BIGINT
         FROM outputs
         WHERE is_spent = FALSE
         GROUP BY address
@@ -264,5 +269,9 @@ export class Database {
     } finally {
       client.release();
     }
+  }
+
+  toSatoshis (value: number | string): bigint {
+    return BigInt(Math.round(Number(value) * 100_000_000));
   }
 }
