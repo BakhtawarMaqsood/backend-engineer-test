@@ -59,6 +59,15 @@ export class Database {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS balance_snapshots (
+        block_height INTEGER NOT NULL,
+        address TEXT NOT NULL,
+        balance BIGINT NOT NULL,
+        PRIMARY KEY (block_height, address)
+      );
+    `);
   }
 
   async cleanupDatabase(): Promise<void> {
@@ -153,9 +162,32 @@ export class Database {
           INSERT INTO blocks (id, height) VALUES ($1, $2)
         `, [block.id, block.height]);
 
+        const changedAddresses = new Set<string>();
+
         for (const transaction of block.transactions) {
-          await this.processTransaction(client, transaction, block.id);
+          await this.processTransaction(client, transaction, block.id, changedAddresses);
         }
+
+        for (const address of changedAddresses) {
+          const balRes = await client.query(
+            `SELECT balance FROM balances WHERE address = $1`,
+            [address]
+          );
+          const balance = balRes.rows.length > 0 ? BigInt(balRes.rows[0].balance) : 0n;
+          await client.query(
+            `INSERT INTO balance_snapshots (block_height, address, balance)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (block_height, address) DO UPDATE SET balance = EXCLUDED.balance`,
+            [block.height, address, balance]
+          );
+        }
+
+        await client.query(`
+          DELETE FROM balance_snapshots
+          WHERE block_height < (
+            SELECT MAX(block_height) FROM balance_snapshots
+          ) - 1999
+        `);
 
         await client.query('COMMIT');
       } catch (error) {
@@ -166,7 +198,7 @@ export class Database {
     }
   }
 
-  private async processTransaction(client: any, transaction: Transaction, blockId: string): Promise<void> {
+  private async processTransaction(client: any, transaction: Transaction, blockId: string, changedAddresses?: Set<string>): Promise<void> {
     await client.query(`
       INSERT INTO transactions (id, block_id) VALUES ($1, $2)
     `, [transaction.id, blockId]);
@@ -185,7 +217,7 @@ export class Database {
       if (result.rows.length > 0) {
         const { address, value } = result.rows[0];
         const negativeValue = (-BigInt(value)).toString();
-        
+        if (changedAddresses) changedAddresses.add(address);
         await client.query(`
           INSERT INTO balances (address, balance) VALUES ($1, $2)
           ON CONFLICT (address) DO UPDATE SET 
@@ -197,7 +229,7 @@ export class Database {
 
     for (let i = 0; i < transaction.outputs.length; i++) {
       const output = transaction.outputs[i];
-      
+      if (changedAddresses) changedAddresses.add(output.address);
       await client.query(`
         INSERT INTO outputs (transaction_id, address, value, index) 
         VALUES ($1, $2, $3, $4)
@@ -252,16 +284,18 @@ export class Database {
       }
   
       await client.query(`DELETE FROM blocks WHERE height > $1`, [height]);
-  
+
       await client.query(`DELETE FROM balances`);
       await client.query(`
         INSERT INTO balances (address, balance)
-        SELECT address, SUM(value)::BIGINT
-        FROM outputs
-        WHERE is_spent = FALSE
-        GROUP BY address
-      `);
-  
+        SELECT address, balance FROM balance_snapshots
+        WHERE block_height = (
+          SELECT MAX(block_height) FROM balance_snapshots WHERE block_height <= $1
+        )
+      `, [height]);
+
+      await client.query(`DELETE FROM balance_snapshots WHERE block_height > $1`, [height]);
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
